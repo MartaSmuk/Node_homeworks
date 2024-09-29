@@ -14,6 +14,10 @@ app.use(express.json());
 app.post('/api/register', (req, res) => {
     const { email, name, password } = req.body;
 
+    if (!email || !name || !password) {
+        return res.status(400).json({ error: 'Please put a correct email, name, password' });
+    }
+
     // unique user id is generated
     const userId = crypto.randomUUID();
 
@@ -34,18 +38,14 @@ app.post('/api/register', (req, res) => {
 
     //check the password
     if(!correctPassword.test(password)) {
-        return res.status(400).json({ error: 'Invalid email format' });
-    }
-
-    if (!email || !name || !password) {
-        return res.status(400).json({ error: 'Please put a correct email, name, password' });
+        return res.status(400).json({ error: 'Invalid password format' });
     }
 
     const newUser = {id: userId, email, name, password };
     users.push(newUser);
     console.log(newUser);
 
-    res.status(200).json({
+    res.status(201).json({
         message: 'Your user is registered successfully',
         user: {
             id: userId,
@@ -69,7 +69,7 @@ function checkUserId(req, res, next) {
         return res.status(401).json({ error: 'Unauthorized: x-user-id header is required' });
     }
 
-    const user = users.find(i => i.id === userId);
+    const user = users.find(user => user.id === userId);
     if(!user) {
         return res.status(401).json({ error: 'Unauthorized: Invalid user id' });
     }
@@ -99,7 +99,7 @@ app.put('/api/cart/:productId', checkUserId, (req, res) => {
     const userId = req.userId;
 
     // check whether product exists 
-    const product = products.find(i => i.id === productId);
+    const product = products.find(prod => prod.id === productId);
     if(!product) {
         return res.status(404).json({ error: 'Product not found' });
     }
@@ -126,13 +126,13 @@ app.delete('/api/cart/:productId', checkUserId, (req, res) => {
     const userId = req.userId;
 
     //find cart of the product
-    let cart = carts.find(i => i.userId === userId);
+    let cart = carts.find(cart => cart.userId === userId);
     if(!cart) {
         return res.status(404).json({error: 'Cart not found for the user' })
     }
 
     //check whether the product exists in the cart
-    const productIndex = cart.products.findIndex(i => i.id === productId);
+    const productIndex = cart.products.findIndex(prod => prod.id === productId);
     if(productIndex === -1) {
         return res.status(404).json({ error: 'Product not found in the cart' });
     }
@@ -149,7 +149,7 @@ app.post('/api/cart/checkout', checkUserId, (req, res) => {
     const userId = req.userId;
 
     //check where is user's cart
-    const cart = carts.find(i => i.userId === userId);
+    const cart = carts.find(cart => cart.userId === userId);
     if (!cart || cart.products.length === 0) {
         return res.status(400).json({ error: 'Cart is empty or not found' });
     }
@@ -171,7 +171,7 @@ app.post('/api/cart/checkout', checkUserId, (req, res) => {
     // clear user's cart after the order was created
     cart.products = [];
 
-    res.status(200).json({
+    res.status(201).json({
         message: 'Order created successfully',
         order: order
     });
