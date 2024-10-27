@@ -17,8 +17,7 @@ const app = express();
 const PORT = 3000;
 
 //instantiate event Emitter
-class FileEventEmitter extends EventEmitter {}
-const fileEventEmitter = new FileEventEmitter();
+const fileEventEmitter = new EventEmitter();
 
 app.use(express.json());
 
@@ -64,6 +63,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const prodFilePath = path.join(__dirname, 'products.store.json');
+const csvFilePath = path.join(__dirname, 'products.csv');
 const logFilePath = path.join(__dirname, 'filesUpload.log');
 
 //setup multer to upload files
@@ -80,29 +80,25 @@ fileEventEmitter.on('fileUploadStart', () => logEvent('File upload has started.'
 fileEventEmitter.on('fileUploadEnd', () => logEvent('File has been uploaded.'));
 fileEventEmitter.on('fileUploadFailed', (error) => logEvent(`Error occured, file cannot be uploaded; Details: ${error}`));
 
+// Helper to check if JSON file is empty and convert CSV if needed
+function convertCsvToJson(isFileEmpty, start = 0) {
+    const readProductsStream = fs.createReadStream(csvFilePath);
+    const writeProductsStream = fs.createWriteStream(prodFilePath, { start, flags: 'r+' });
+    writeProductsStream.write(isFileEmpty ? '[' : ',');
 
-// helper function to read products from the JSON File
-function readProductsFromFile() {
-    try{
-        const data = fs.readFileSync(prodFilePath, 'utf8');
-        return JSON.parse(data);
-    } catch(err) {
-        console.error('Error reading products file:', err);
-        return[];
-    } 
+    readProductsStream
+        .pipe(csv())
+        .on('data', (data) => {
+            const jsonStr = JSON.stringify(data) + ',';
+            writeProductsStream.write(jsonStr);
+        })
+        .on('end', () => {
+            writeProductsStream.write(']');
+            writeProductsStream.end();
+        });
 }
 
-// helper Function to write products to the JSON file
-function writeProductsToFile(products) {
-    try{
-        fs.writeFileSync(prodFilePath, JSON.stringify(products, null, 2), 'utf8');
-    } catch(err) {
-        console.error('Error writing products file:', err);
-        return[];
-    } 
-}
-
-// POST /products/import - Endpoint to upload and process CSV file
+// CSV Import Route with conversion check
 app.post('/products/import', upload.single('file'), (req, res) => {
     console.log(req.file);
     if (!req.file) {
@@ -110,60 +106,28 @@ app.post('/products/import', upload.single('file'), (req, res) => {
     }
 
     // Path to the uploaded CSV file
-    const filePath = req.file.path;  
+    const filePath = req.file.path;
 
-    try {
-        // Emit event to start upload
-        fileEventEmitter.emit('fileUploadStart');  
+    // Check if JSON file is empty
+    fs.stat(prodFilePath, (err, stats) => {
+        if (err) throw err;
 
-        // Read existing products from JSON file
-        const products = readProductsFromFile(); 
-
-        // Stream the uploaded CSV file and parse its content
-        fs.createReadStream(filePath)
-            .pipe(csv())
-            .on('data', (row) => {
-                const newProduct = {
-                    name: row.name,
-                    description: row.description,
-                    category: row.category,
-                    price: parseFloat(row.price)
-                };
-
-                // Validate the product data using Joi schema
-                const { error } = productSchema.validate(newProduct);
-                if (!error) {
-                    // Add the id after validation
-                    newProduct.id = crypto.randomUUID();
-                    // Add the new product to the list if valid  
-                    products.push(newProduct);  
-                } else {
-                    console.error('Validation error for product:', error.details[0].message);
-                }
-            })
-            .on('end', () => {
-                // Save updated products to JSON
-                writeProductsToFile(products);
-                // Emit event for successful upload 
-                fileEventEmitter.emit('fileUploadEnd');  
-
-                // Clean up the uploaded file after successful processing
-                fs.unlinkSync(filePath);  // Delete the file now that it's no longer needed
-
-                res.status(200).json({ message: 'File uploaded and products saved successfully.' });
-            })
-            .on('error', (error) => {
-                fileEventEmitter.emit('fileUploadFailed', error.message);  // Emit event for failed upload
-                res.status(500).json({ error: 'File processing failed.' });
+        // If JSON file is empty, start CSV conversion
+        if (stats.size === 0) {
+            convertCsvToJson(true);
+            res.status(200).json({ message: 'CSV file has been converted to JSON successfully.' });
+        } else {
+            fs.open(prodFilePath, 'r+', (err, fd) => {
+                if (err) throw err;
+                fs.ftruncate(fd, stats.size - 1, (err) => {
+                    if (err) throw err;
+                    convertCsvToJson(false, stats.size - 1);
+                    res.status(200).json({ message: 'CSV file has been appended to JSON successfully.' });
+                });
             });
-
-    } catch (error) {
-        // Emit event for failed upload
-        fileEventEmitter.emit('fileUploadFailed', error.message);  
-        res.status(500).json({ error: 'An error occurred during file upload.' });
-    }
+        }
+    });
 });
-
 
 // register/create a product
 app.post('/product', async(req, res) => {
@@ -208,10 +172,8 @@ app.post('products/import', upload.single('file'), (req, res) => {
     };
 })
 
-
 // register/create user
 app.post('/api/register', async (req, res) => {
-
     try {
         const value = await userSchema.validateAsync(req.body);
         console.log('Server is working');
@@ -238,8 +200,14 @@ app.post('/api/register', async (req, res) => {
         });
     }
     catch (err) {
-        console.log(err);
-        res.status(422).json(err);
+        if (err.isJoi) {
+            // Respond with the Joi error message if validation fails
+            res.status(400).json({ error: `Invalid data: ${err.details[0].message}` });
+        } else {
+            // Handle other errors
+            console.error('Error registering user:', err);
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
 
 });
