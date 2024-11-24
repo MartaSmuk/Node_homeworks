@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES6",                          // Specifies the ECMAScript target version
+    "module": "CommonJS",                     // Use CommonJS for Node.js
+    "moduleResolution": "Node",               // Use Node.js module resolution strategy
+    "outDir": "./dist",                       // Output directory for compiled files
+    "rootDir": "./src",                       // Root directory of source files
+    "strict": true,                           // Enable strict type-checking
+    "esModuleInterop": true,                  // Enable compatibility with CommonJS
+    "forceConsistentCasingInFileNames": true  // Enforce consistent file naming
+  },
+  "include": ["src/**/*"],                    // Include all TypeScript files in src/
+  "exclude": ["node_modules"]                 // Exclude node_modules
+}
