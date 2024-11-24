@@ -1,4 +1,35 @@
-export const products = [
+// Define the Product interface for strong typing of product objects
+interface Product {
+    id: number;
+    title: string;
+    description: string;
+    price: number;
+}
+
+// Define the User interface (assuming basic user properties)
+interface User {
+    id: string;
+    name: string;
+    email: string;
+    // Add other user-specific properties as needed
+}
+
+// Define the Cart interface (assuming each cart holds products and a user ID)
+interface Cart {
+    userId: string;
+    products: Product[];
+}
+
+// Define the Order interface (assuming an order contains products and a user ID)
+interface Order {
+    userId: string;
+    products: Product[];
+    totalPrice: number;
+    orderDate: string; // or Date if you prefer a Date object
+}
+
+// Define the arrays with the appropriate types
+export const products: Product[] = [
     {
         id: 1,
         title: "Digital Painting",
@@ -61,8 +92,9 @@ export const products = [
     }
 ];
 
-export const users = []; // store the list of users here
+export const users: User[] = []; // List of users (you can define the User structure with more details)
 
-export const carts = []; // list of carts
+export const carts: Cart[] = []; // List of carts, each containing products and a userId
 
-export const orders = []; // list of crated orders
+export const orders: Order[] = []; // List of orders containing products, userId, total price, and order date
+
